@@ -75,3 +75,97 @@ void process_recieved_PDU(mic_tcp_PDU pdu, mic_tcp_sock_addr addr){
     app_buffer_put(pdu.payload);
 }
 
+int mic_tcp_accept(int socket, mic_tcp_sock_addr* addr) {
+    printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
+    if(mode==SERVER && mysocket.fd==socket){
+
+        //WAIT FOR SYN
+        mysocket.state = WAIT_FOR_SYN;
+        SYN.payload.size= 2*sizeof(short)+2*sizeof(int)+3*sizeof(char);
+        SYN.payload.data=malloc(SYN.payload.size);
+
+        //Reception SYN
+        unsigned long timer1=1;
+        while(IP_recv(SYN, &mysocket_distant.addr,timer1)==-1){};
+
+        // Construire SYNACK
+        mic_tcp_pdu SYNACK={{mysocket.addr.port, mysocket_distant.addr.port, num_seq, 0,1,1,0},{"",0}};
+
+        while(1){
+            //Activation timer
+            unsigned long timer=1;
+
+            //Envoi SYNACK
+            IP_send(SYNACK, mysocket_distant.addr);
+
+            //WAIT FOR ACK
+            mysocket.state = WAIT_FOR_ACK;
+            ACK.payload.size= 2*sizeof(short)+2*sizeof(int)+3*sizeof(char);
+            ACK.payload.data=malloc(ACK.payload.size);
+
+            if (IP_recv(ACK,&mysocket_distant.addr,timer)==-1) {
+                //Expiration timer ou non reception ACK
+                printf("ACK non reçu\n") ;
+            }
+            else {
+                //Reception ACK
+                ACK.hd=get_mic_tcp_header(ACK.payload);
+                if(ACK.hd.ack==1){
+                    //Connected
+                    mysocket.state = CONNECTED;
+                    return 0;
+                }
+            }
+        }
+    }
+    else{
+        return -1;
+    }
+}
+
+int mic_tcp_connect (int socket, mic_tcp_sock_addr addr) {
+    printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
+    if(mode==CLIENT && mysocket.fd==socket){
+
+        // Construire SYN={{//Header},{//payload}};
+        mic_tcp_pdu SYN={{mysocket.addr.port, mysocket_distant.addr.port, num_seq, 0,1,0,0},{"",0}};
+
+        while(1){
+            // Activation timer
+            unsigned long timer=1;
+
+            // Envoi SYN
+            IP_send(SYN, mysocket_distant.addr);
+
+            // WAIT for SYNACK
+            mysocket.state = WAIT_FOR_SYNACK;
+
+            SYNACK.payload.size= 2*sizeof(short)+2*sizeof(int)+3*sizeof(char);
+            SYNACK.payload.data=malloc(SYNACK.payload.size);
+
+            if (IP_recv(SYNACK,&mysocket_distant.addr,timer)==-1) {
+                //Expiration timer ou non reception SYNACK
+                printf("SYNACK non reçu\n") ;
+            }
+            else {
+                // Reception SYNACK
+                SYNACK.hd=get_mic_tcp_header(SYNACK.payload);
+                if(SYNACK.hd.syn==1 && SYNACK.hd.ack==1){
+                    // Construire ACK
+                    mic_tcp_pdu ACK={{mysocket.addr.port, mysocket_distant.addr.port, num_seq,0,0,1,0},{"",0}};
+
+                    //Envoi ACK
+                    IP_send(ACK, mysocket_distant.addr);
+
+                    //Connected
+                    mysocket.state = CONNECTED;
+                    return 0;
+                }
+                // Comment on traite le cas où ce n'est pas SYNACK ? et qu'on reboucle en wait for synack
+            }
+        }
+    }
+    else{
+        return -1;
+    }
+}
