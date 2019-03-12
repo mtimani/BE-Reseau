@@ -1,3 +1,7 @@
+/* Travail réalisé par :
+ SETTELN Antoine et 
+ TIMANI Mario*/
+
 #include <mictcp.h>
 #include <api/mictcp_core.h>
 
