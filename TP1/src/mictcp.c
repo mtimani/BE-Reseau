@@ -4,7 +4,8 @@
 #define D 20
 
 /*Variables globales*/
-mic_tcp_sock mysocket;
+mic_tcp_sock mysocket; /*En vue de la version finale et le multithreading (pour representer plusieurs clients
+comme dans la vie reelle) nous utiliserons un tableau de sockets dans les versions suivantes */
 mic_tcp_sock_addr addr_sock_dest;
 int next_fd = 0;
 
