@@ -12,6 +12,7 @@ mic_tcp_sock mysocket; /*En vue de la version finale et le multithreading (pour 
 comme dans la vie reelle) nous utiliserons un tableau de sockets dans les versions suivantes */
 mic_tcp_sock_addr addr_sock_dest;
 int next_fd = 0;
+int num_packet = 0;
 int P_Sent = 0;
 int P_Recv = 0;
 int tab[SIZE] = {1,1,1,1,1,1,1,1,1,1};
@@ -99,7 +100,7 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
     int nb_sent = 0;
     mic_tcp_pdu sent_PDU;
     mic_tcp_pdu ack;
-    unsigned int timeout = 100;//100 ms time
+    unsigned int timeout = 3;//100 ms time
     int recieved_PDU = 0;
     int nb_recieved_mesg = 0;
     float losses = 0;
@@ -126,6 +127,8 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
 
         //Envoi du PDU
         size_PDU = IP_send(sent_PDU,addr_sock_dest);
+        printf("Envoi du packet : %d, tentative No : %d.\n",num_packet,nb_sent);
+		num_packet++;
         nb_sent++;
 
         //WAIT_FOR_ACK
@@ -136,7 +139,7 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
         ack.payload.data = malloc(ack.payload.size);
 
         while(!recieved_PDU){
-            if (((result = IP_recv(&(ack),&addr_sock_dest,timeout)) >= 0) && (ack.header.ack == 1) && (ack.header.ack_num == P_Sent)){
+            if (((result = IP_recv(&(ack),&addr_sock_dest,timeout)) != -1) && (ack.header.ack == 1) && (ack.header.ack_num == P_Sent)){
                 recieved_PDU = 1;
                 tab[next_fd] = 1;
                 next_fd = (next_fd + 1) % SIZE;
@@ -161,7 +164,7 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
                         if(nb_sent < MAX_SENDINGS){
                             size_PDU = IP_send(sent_PDU,addr_sock_dest);
                             nb_sent++;
-                            printf("Renvoi du packet : tentative No : %d.\n",nb_sent);
+                            printf("Renvoi du packet : %d, tentative No : %d.\n",num_packet,nb_sent);
                         }
                         else{
                             perror("Error : too many failed attempts !\n");
@@ -240,24 +243,21 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
 
     mic_tcp_pdu ack;
 
+    ack.header.source_port = mysocket.addr.port;
+    ack.header.dest_port = addr.port;
+    ack.header.ack_num = P_Recv;
+    ack.header.syn = 0;
+    ack.header.ack = 1;
+    ack.header.fin = 0;
+
+    ack.payload.size = 0;// No need of DU for an ACK
+
+    //ACK Sent
+    IP_send(ack,addr);
+
     if (pdu.header.seq_num == P_Recv){ //Checks if the received PDU has the correct sequence number
         app_buffer_put(pdu.payload);
         mysocket.state = ESTABLISHED;
         P_Recv = (P_Recv + 1) % 2;
-    }
-    else{ //The sequence number is not correct : PDU rejected, an ACK with the awaited seq_num is sent
-        ack.header.source_port = mysocket.addr.port;
-        ack.header.dest_port = addr.port;
-        ack.header.ack_num = P_Recv;
-        ack.header.syn = 0;
-        ack.header.ack = 1;
-        ack.header.fin = 0;
-
-        ack.payload.size = 0;// No need of DU for an ACK
-
-        //ACK Sent
-        if(IP_send(ack,addr) == -1){
-            printf("Error : IP_send\n");
-        }
     }
 }
