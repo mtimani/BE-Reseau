@@ -3,7 +3,7 @@
 #include <pthread.h>
 #include "../include/mictcp.h"
 
-#define LOSS_RATE 12
+#define LOSS_RATE 20
 #define MAX_SENDINGS 20
 #define SIZE 10 //Taille de la fenêtre glissante
 

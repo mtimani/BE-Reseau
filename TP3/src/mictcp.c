@@ -2,7 +2,7 @@
 #include <api/mictcp_core.h>
 #include "../include/mictcp.h"
 
-#define LOSS_RATE 20
+#define LOSS_RATE 12
 #define MAX_AUTHORIZED_LOSS_RATE 10
 #define MAX_SENDINGS 20
 #define SIZE 10 //Taille de la fenêtre glissante
@@ -13,8 +13,6 @@ comme dans la vie reelle) nous utiliserons un tableau de sockets dans les versio
 mic_tcp_sock_addr addr_sock_dest;
 int next_fd = 0;
 int num_packet = 0;
-int P_Sent = 0;
-int P_Recv = 0;
 int tab[SIZE] = {1,1,1,1,1,1,1,1,1,1};
 int i;
 int result = -1;
@@ -100,12 +98,13 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
     int nb_sent = 0;
     mic_tcp_pdu sent_PDU;
     mic_tcp_pdu ack;
-    unsigned int timeout = 3;//100 ms time
+    unsigned int timeout = 100;//100 ms time
     int recieved_PDU = 0;
     int nb_recieved_mesg = 0;
     float losses = 0;
     int i;
     int result = -1;
+    int P_Sent = 0;
 
     if ((mysocket.fd == mic_sock)&&(mysocket.state == ESTABLISHED)){
 
@@ -121,9 +120,6 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
             //Payload
         sent_PDU.payload.data = mesg;
         sent_PDU.payload.size = mesg_size;
-
-        //Sent packets number incrementation
-        P_Sent = (P_Sent + 1) % 2;
 
         //Envoi du PDU
         size_PDU = IP_send(sent_PDU,addr_sock_dest);
@@ -155,7 +151,6 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
                     losses = (float)(SIZE - nb_recieved_mesg)/(float)SIZE*100.0;
                     printf("Loss percetage = %f\n",losses);
                     if(losses <= MAX_AUTHORIZED_LOSS_RATE){
-                        P_Sent = (P_Sent + 1) % 2;
                         next_fd = (next_fd + 1) % SIZE;
                         recieved_PDU = 1;
                         printf("Loss rate acceptable : PDU not sent back\n");
@@ -176,6 +171,9 @@ int mic_tcp_send (int mic_sock, char* mesg, int mesg_size)
                     printf("ACK recieved but P_Sent!=P_Recv\n");
                 }
             }
+        }
+        if(result != -1){
+            P_Sent = (P_Sent + 1) % 2;
         }
     }
     else{
@@ -242,6 +240,7 @@ void process_received_PDU(mic_tcp_pdu pdu, mic_tcp_sock_addr addr)
     printf("[MIC-TCP] Appel de la fonction: "); printf(__FUNCTION__); printf("\n");
 
     mic_tcp_pdu ack;
+    int P_Recv = 0;
 
     ack.header.source_port = mysocket.addr.port;
     ack.header.dest_port = addr.port;
